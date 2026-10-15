@@ -51,3 +51,11 @@ Linux Debian 13 x64، ذاكرة متاحة نحو 32 GB، Node.js 24.19.0 وnpm
 - فحص EF لا يظهر تغييرات نموذج معلقة؛ لا ترحيل جديد في التحديث. نشر Release نجح. لا اعتماد تشغيل جديد ولا خدمة مدفوعة أو خط خارجي.
 
 الصور والنتائج الأصلية في .local/browser (مستبعدة من Git)، وصور مختارة ببيانات اصطناعية في docs/screenshots للمراجعة. لم ينفذ هذا التحديث على جهاز المستخدم من السحابة.
+
+### تصحيح أداة التحديث على Windows PowerShell
+
+أرسل المستخدم فشل التحديث عند السطر الذي يستدعي Assembly.Load باسم System.IO.Compression.FileSystem المختصر. وقع الخطأ بعد التحقق من الأرشيف وقبل مرحلة النسخ والنسخ الاحتياطي؛ لم يطبق تحديث الشيفرة. الاختبارات السابقة على PowerShell SDK/Linux لم تكشف اختلاف حل أسماء المكتبات في Windows PowerShell 5.1.
+
+استُبدل الاستدعاء بـ`Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop` في الأداة وفحوصها، وهو أسلوب PowerShell المدعوم لتحميل المكتبة. أعيدت فحوص حماية الملفات الستة ونجحت على Linux. فُحصت مراجع Microsoft.NETFramework.ReferenceAssemblies.net48 1.0.3 من خلال استعادة NuGet، وأكدت توافر ZipFile.OpenRead وZipArchiveEntry.ExternalAttributes في .NET Framework 4.8. لم ينفذ التشغيل المصحح على Windows في السحابة؛ إعادة تشغيله محليًا لدى المستخدم هي خطوة التحقق المتبقية. لم تتغير فحوص SHA256 أو استثناءات الملفات الخاصة أو أوامر قاعدة البيانات.
+
+مرجع Add-Type الرسمي لـWindows PowerShell 5.1: https://github.com/MicrosoftDocs/PowerShell-Docs/blob/main/reference/5.1/Microsoft.PowerShell.Utility/Add-Type.md.

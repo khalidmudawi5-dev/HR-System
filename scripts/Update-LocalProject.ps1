@@ -57,7 +57,9 @@ try {
     try { $actual = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','') }
     finally { $stream.Dispose(); $sha.Dispose() }
     if ($actual -ine $ArchiveSha256) { throw 'Archive SHA256 mismatch. Nothing was changed.' }
-    [void][Reflection.Assembly]::Load('System.IO.Compression.FileSystem')
+    # Add-Type resolves the .NET Framework assembly from the Windows GAC;
+    # Assembly.Load with a simple name does not reliably do that in Windows PowerShell 5.1.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
     $zip = [IO.Compression.ZipFile]::OpenRead($archive)
     $items = New-Object 'System.Collections.Generic.List[object]'
     $prefix = 'HR-System-'+$Revision+'/'

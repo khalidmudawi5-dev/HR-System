@@ -1,7 +1,9 @@
 # Self-contained updater checks. Uses only disposable files, never SQL Server.
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
-[void][Reflection.Assembly]::Load('System.IO.Compression.FileSystem')
+# Add-Type resolves the .NET Framework assembly from the Windows GAC;
+# Assembly.Load with a simple name does not reliably do that in Windows PowerShell 5.1.
+Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
 $helper=[IO.Path]::GetFullPath([IO.Path]::Combine($PSScriptRoot,'..','scripts','Update-LocalProject.ps1'))
 $root=[IO.Path]::Combine([IO.Path]::GetTempPath(),'hr-updater-test-'+[Guid]::NewGuid().ToString('N'))
 $target=[IO.Path]::Combine($root,'checkout')
