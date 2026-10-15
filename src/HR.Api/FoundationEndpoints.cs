@@ -8,6 +8,8 @@ public static class FoundationEndpoints
 {
     public static void MapFoundation(this WebApplication app)
     {
+        app.MapGet("/api/dashboard",async(System.Security.Claims.ClaimsPrincipal user,DashboardService dashboard,IConfiguration config,CancellationToken ct)=>
+            Results.Ok(await dashboard.Read(user,config["Product:Name"] ?? "HR Platform",ct))).RequireAuthorization();
         app.MapGet("/api/organization",async(HrDbContext db)=>Results.Ok(await db.Organizations.SingleOrDefaultAsync())).RequireAuthorization();
         app.MapPut("/api/organization",async(OrganizationInput x,HrDbContext db)=>{
             var name=Rules.Text(x.Name,160,"اسم المنشأة");
@@ -35,8 +37,8 @@ public static class FoundationEndpoints
         app.MapPut("/api/branches/{id:guid}",async(Guid id,UnitInput x,HrDbContext db)=>await Rename(id,x,db.Branches,db)).RequireAuthorization("HR");
         app.MapPut("/api/departments/{id:guid}",async(Guid id,UnitInput x,HrDbContext db)=>await Rename(id,x,db.Departments,db)).RequireAuthorization("HR");
         app.MapPut("/api/jobs/{id:guid}",async(Guid id,UnitInput x,HrDbContext db)=>await Rename(id,x,db.Jobs,db)).RequireAuthorization("HR");
-        app.MapGet("/api/audit",async(int? page,HrDbContext db)=>{
-            var n=Math.Max(page ?? 1,1);return Results.Ok(new{total=await db.Audit.CountAsync(),items=await db.Audit.AsNoTracking().OrderByDescending(x=>x.Id).Skip((Math.Min(n,100000)-1)*50).Take(50).ToListAsync()});
+        app.MapGet("/api/audit",async(int? page,HrDbContext db,DashboardService dashboard)=>{
+            var n=Math.Max(page ?? 1,1);return Results.Ok(new{total=await db.Audit.CountAsync(),items=await dashboard.Activity(n).ToListAsync()});
         }).RequireAuthorization("Admin");
     }
     private static async Task<IResult> Rename<T>(Guid id,UnitInput x,DbSet<T> set,HrDbContext db) where T:Versioned,INamedUnit

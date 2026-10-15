@@ -16,7 +16,8 @@ public class RuleException(string message) : Exception(message);
 public record EmployeeInput(string Number, string FullName, string Email, string Phone,
     DateOnly JoinDate, string Status, string ContractType, Guid JobPositionId, Guid? ManagerId, Guid? Version);
 public record EmployeeView(Guid Id, Guid Version, string Number, string FullName, string Email,
-    string Phone, DateOnly JoinDate, string Status, string ContractType, Guid JobPositionId, Guid? ManagerId);
+    string Phone, DateOnly JoinDate, string Status, string ContractType, Guid JobPositionId, Guid? ManagerId,
+    string? JobTitle=null,string? Department=null,string? Branch=null,string? ManagerName=null,bool CanReadAttachments=false);
 public record FinancialInput(decimal BaseSalary, string Bank, string Iban, DateOnly EffectiveFrom, Guid? Version);
 public record OrganizationInput(string Name, string TimeZone, Guid? Version);
 public record UnitInput(string Name, Guid? ParentId,Guid? Version=null);
@@ -61,7 +62,8 @@ public static partial class Rules
         return s;
     }
     public static EmployeeView View(Employee x) => new(x.Id, x.Version, x.Number, x.FullName, x.Email,
-        x.Phone, x.JoinDate, x.Status, x.ContractType, x.JobPositionId, x.ManagerId);
+        x.Phone, x.JoinDate, x.Status, x.ContractType, x.JobPositionId, x.ManagerId,
+        x.JobPosition?.Name,x.JobPosition?.Department?.Name,x.JobPosition?.Department?.Branch?.Name,x.Manager?.FullName);
     public static void Apply(Employee e, EmployeeInput x)
     {
         e.Number=x.Number; e.FullName=x.FullName; e.Email=x.Email; e.Phone=x.Phone;

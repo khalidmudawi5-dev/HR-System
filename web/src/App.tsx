@@ -1,95 +1,664 @@
-import {useEffect,useState,useId,cloneElement,isValidElement,type ReactElement,type FormEvent,type ReactNode} from 'react';
-import {api,formValues} from './api';
-import {roles,words,type Language} from './i18n';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import { api, formValues } from "./api";
+import { useLoad, useRoute } from "./hooks";
+import { roles, words } from "./i18n";
+import {
+  hasRole,
+  errorText,
+  type User,
+  type Dashboard,
+  type Section,
+  type Notice,
+} from "./model";
+import { Field, Icon, type IconName } from "./ui";
+import { Overview } from "./pages/Overview";
+import { Employees } from "./pages/Employees";
+import {
+  Organization,
+  ImportEmployees,
+  Users,
+  Audit,
+  Financial,
+  PasswordForm,
+} from "./pages/FoundationPages";
 
-type User={id:string;email:string;roles:string[]};
-type Employee={id:string;version:string;number:string;fullName:string;email:string;phone:string;joinDate:string;status:string;contractType:string;jobPositionId:string;managerId:string|null};
-type Page<T>={total:number;items:T[]};
-type Unit={id:string;name:string;version:string;branchId?:string;departmentId?:string};
-type Structure={branches:Unit[];departments:Unit[];jobs:Unit[]};
-type Org={name:string;timeZone:string;version:string};
-type Notice=(text:string)=>void;
-const errorText=(e:unknown)=>e instanceof Error?e.message:'تعذر إكمال العملية.';
-const date=()=>new Date().toISOString().slice(0,10);
+const descriptions: Record<Section, string> = {
+  home: "صورة واضحة لفريقك، وكل ما تحتاجه لبدء يومك.",
+  employees: "إدارة ملفات الفريق والبيانات الوظيفية من مكان واحد.",
+  organization: "ابدأ بمنشأتك، ثم رتّب الفروع والأقسام والوظائف.",
+  import: "أضف فريقك من ملف Excel، مع مراجعة البيانات قبل حفظها.",
+  users: "امنح كل شخص الوصول المناسب واربطه بملفه الوظيفي.",
+  audit: "تتبّع التغييرات ومن أجراها، بوضوح.",
+  financial: "إدارة بيانات الراتب الأساسي والبنك حسب صلاحياتك.",
+  security: "حافظ على أمان حسابك وحدّث كلمة المرور.",
+};
+type Toast = {
+  message: string;
+  tone: "success" | "error" | "info";
+  id: number;
+};
+export default function App() {
+  const [user, setUser] = useState<User | null>();
+  const [authError, setAuthError] = useState("");
+  const [toast, setToast] = useState<Toast | null>(null);
+  const lang = "ar";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
+  const userRef = useRef(user);
+  userRef.current = user;
+  const route = useRoute();
+  const { data: meta } = useLoad<{ name: string }>("/meta");
+  const dashboard = useLoad<Dashboard>(
+    user ? "/dashboard" : null,
+    revision,
+    true,
+  );
+  const t = words[lang];
+  useEffect(() => {
+    api<User>("/auth/me")
+      .then(setUser)
+      .catch(() => setUser(null));
+  }, []);
+  useEffect(() => {
+    const expired = () => {
+      if (userRef.current) {
+        setUser(null);
+        setAuthError("انتهت الجلسة. سجل الدخول للمتابعة.");
+      }
+    };
+    window.addEventListener("session-expired", expired);
+    return () => window.removeEventListener("session-expired", expired);
+  }, []);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+  }, [lang]);
+  useEffect(() => {
+    if (meta?.name) document.title = meta.name;
+  }, [meta]);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  useEffect(() => {
+    if (!toast || toast.tone === "error") return;
+    const timer = setTimeout(() => setToast(null), 6500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  useEffect(() => {
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, []);
+  useEffect(() => {
+    setMenuOpen(false);
+    setSearch("");
+    setEmployeeSearch("");
+  }, [user?.id]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const navigation = document.getElementById("main-navigation");
+    const opener = document.querySelector<HTMLButtonElement>(".mobile-menu");
+    const before = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    navigation?.querySelector<HTMLButtonElement>(".mobile-nav-close")?.focus();
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !navigation) return;
+      const items = Array.from(
+        navigation.querySelectorAll<HTMLElement>(
+          "button:not([disabled]),a[href]",
+        ),
+      ).filter((el) => el.getClientRects().length > 0);
+      const first = items[0],
+        last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    window.addEventListener("keydown", trap);
+    return () => {
+      window.removeEventListener("keydown", trap);
+      document.body.style.overflow = before;
+      opener?.focus();
+    };
+  }, [menuOpen]);
+  const notify: Notice = useCallback((message, tone = "success") => {
+    setToast({ message, tone, id: Date.now() });
+    if (tone === "success") setRevision((v) => v + 1);
+  }, []);
+  function go(section: Section, detail = "") {
+    route.navigate(section, detail);
+    setMenuOpen(false);
+    if (section !== "employees") setEmployeeSearch("");
+  }
+  const has = (...r: string[]) => !!user && hasRole(user, ...r);
+  const links: { id: Section; label: string; icon: IconName; group: string }[] =
+    [
+      { id: "home", label: t.home, icon: "home", group: "مساحة العمل" },
+      ...(has("Administrator", "HR", "Manager", "Employee")
+        ? [
+            {
+              id: "employees" as const,
+              label: has("Administrator", "HR")
+                ? t.employees
+                : has("Manager")
+                  ? "الفريق"
+                  : "ملفي",
+              icon: "users" as const,
+              group: "مساحة العمل",
+            },
+          ]
+        : []),
+      ...(has("Administrator", "HR")
+        ? [
+            {
+              id: "organization" as const,
+              label: t.organization,
+              icon: "building" as const,
+              group: "إدارة المنشأة",
+            },
+            {
+              id: "import" as const,
+              label: t.import,
+              icon: "upload" as const,
+              group: "إدارة المنشأة",
+            },
+          ]
+        : []),
+      ...(has("Administrator", "Payroll")
+        ? [
+            {
+              id: "financial" as const,
+              label: t.financial,
+              icon: "wallet" as const,
+              group: "إدارة المنشأة",
+            },
+          ]
+        : []),
+      ...(has("Administrator")
+        ? [
+            {
+              id: "users" as const,
+              label: t.users,
+              icon: "shield" as const,
+              group: "إدارة النظام",
+            },
+            {
+              id: "audit" as const,
+              label: t.audit,
+              icon: "activity" as const,
+              group: "إدارة النظام",
+            },
+          ]
+        : []),
+      {
+        id: "security",
+        label: lang === "ar" ? "أمان الحساب" : "Account security",
+        icon: "lock",
+        group: "إدارة النظام",
+      },
+    ];
+  const section = links.some((x) => x.id === route.section)
+    ? route.section
+    : "home";
+  async function logout() {
+    try {
+      await api("/auth/logout", "POST");
+      setUser(null);
+      setAuthError("");
+      setToast(null);
+      route.navigate("home");
+    } catch (e) {
+      notify(errorText(e), "error");
+    }
+  }
+  if (user === undefined)
+    return (
+      <div className="session-loading">
+        <span className="brand-icon">HR</span>
+        <span className="spinner" />
+        <p>جارٍ تجهيز مساحة عملك…</p>
+      </div>
+    );
+  if (user === null)
+    return (
+      <Login
+        name={meta?.name ?? "HR Platform"}
+        error={authError}
+        onSubmit={async (x) => {
+          setAuthError("");
+          try {
+            await api("/auth/login", "POST", x);
+            setUser(await api<User>("/auth/me"));
+          } catch (e) {
+            setAuthError(errorText(e));
+          }
+        }}
+      />
+    );
+  const organization =
+    dashboard.data?.organizationName ?? meta?.name ?? "HR Platform";
+  const title = links.find((x) => x.id === section)?.label ?? t.home;
+  const dateLabel = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+    timeZone: dashboard.data?.timeZone ?? "Asia/Riyadh",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
+  return (
+    <div className="shell">
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main-content")?.focus();
+        }}
+      >
+        انتقل إلى المحتوى
+      </a>
+      {menuOpen && (
+        <button
+          className="navigation-backdrop"
+          aria-label="إغلاق قائمة التنقل"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <aside
+        className={menuOpen ? "sidebar is-open" : "sidebar"}
+        id="main-navigation"
+        aria-label="القائمة الرئيسية"
+      >
+        <div className="brand">
+          <span className="brand-icon">HR</span>
+          <div>
+            <strong>{meta?.name ?? "HR Platform"}</strong>
+            <small>إدارة الموارد البشرية</small>
+          </div>
+          <button
+            className="icon-button mobile-nav-close"
+            aria-label="إغلاق القائمة"
+            onClick={() => setMenuOpen(false)}
+          >
+            <Icon name="close" />
+          </button>
+        </div>
+        <div className="organization-badge">
+          <span className="organization-symbol">
+            <Icon name="building" size={19} />
+          </span>
+          <div>
+            <small>المنشأة</small>
+            <strong>{organization}</strong>
+          </div>
+        </div>
+        <nav aria-label="صفحات النظام">
+          {links.map((link, i) => (
+            <div key={link.id}>
+              {(i === 0 || links[i - 1].group !== link.group) && (
+                <span className="nav-caption">{link.group}</span>
+              )}
+              <button
+                aria-label={link.label}
+                aria-current={section === link.id ? "page" : undefined}
+                className={section === link.id ? "nav-link active" : "nav-link"}
+                onClick={() => go(link.id)}
+              >
+                <Icon name={link.icon} size={19} />
+                <span>{link.label}</span>
+                {section === link.id && <span className="nav-indicator" />}
+              </button>
+            </div>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <span className="user-avatar">{user.email[0]?.toUpperCase()}</span>
+          <div>
+            <strong>{user.email}</strong>
+            <small>{user.roles.map((r) => roles[r]).join("، ")}</small>
+          </div>
+          <button
+            className="sidebar-logout icon-button"
+            aria-label={t.logout}
+            title={t.logout}
+            onClick={logout}
+          >
+            <Icon name="logout" size={17} />
+          </button>
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="app-header">
+          <div className="header-start">
+            <button
+              className="icon-button mobile-menu"
+              aria-label="فتح القائمة"
+              aria-expanded={menuOpen}
+              aria-controls="main-navigation"
+              onClick={() => setMenuOpen(true)}
+            >
+              <Icon name="menu" />
+            </button>
+            <div className="breadcrumb">
+              <span>{organization}</span>
+              <Icon name="chevron" size={13} />
+              <strong>{title}</strong>
+            </div>
+          </div>
+          {has("Administrator", "HR", "Manager", "Employee") && (
+            <form
+              className="header-search search-box"
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setEmployeeSearch(search.trim());
+                go("employees");
+                setSearch("");
+              }}
+            >
+              <Icon name="search" size={18} />
+              <input
+                aria-label="بحث سريع عن الموظفين"
+                placeholder="ابحث عن موظف بالاسم أو الرقم…"
+                maxLength={160}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <button
+                className="search-submit"
+                type="submit"
+                aria-label="تنفيذ البحث السريع"
+              >
+                <Icon name="arrow" size={16} />
+              </button>
+            </form>
+          )}
+          <div className="header-actions">
+            <span className="language-label">
+              <Icon name="globe" size={16} />
+              العربية
+            </span>
+            <span className="header-divider" />
+            <button
+              className="header-profile"
+              aria-label="فتح أمان الحساب"
+              onClick={() => go("security")}
+            >
+              <span className="user-avatar">
+                {user.email[0]?.toUpperCase()}
+              </span>
+              <span>
+                <strong>
+                  {dashboard.data?.currentEmployeeName ?? roles[user.roles[0]]}
+                </strong>
+                <small>{user.roles.map((r) => roles[r]).join("، ")}</small>
+              </span>
+            </button>
+          </div>
+        </header>
+        {!online && (
+          <div className="offline-banner" role="alert">
+            أنت غير متصل بالشبكة. يلزم الاتصال بالخادم لحفظ التغييرات.
+          </div>
+        )}
+        <main id="main-content" tabIndex={-1}>
+          <div className="page-heading">
+            <div>
+              <span className="eyebrow">
+                {section === "home" ? "مساحة العمل لفريقك" : organization}
+              </span>
+              <h1>{section === "home" ? "نظرة عامة على منشأتك" : title}</h1>
+              <p>{descriptions[section]}</p>
+            </div>
+            <div className="page-date">
+              <span className="date-icon">
+                <Icon name="calendar" size={19} />
+              </span>
+              <span>
+                <small>اليوم</small>
+                <strong>{dateLabel}</strong>
+              </span>
+            </div>
+          </div>
+          {toast && (
+            <div
+              className={`toast ${toast.tone}`}
+              key={toast.id}
+              role={toast.tone === "error" ? "alert" : "status"}
+            >
+              <Icon
+                name={toast.tone === "error" ? "activity" : "check"}
+                size={19}
+              />
+              <span>{toast.message}</span>
+              <button
+                className="icon-button"
+                aria-label="إغلاق التنبيه"
+                onClick={() => setToast(null)}
+              >
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+          )}
+          {section === "home" && (
+            <Overview
+              user={user}
+              data={dashboard.data}
+              error={dashboard.error}
+              loading={dashboard.loading}
+              onNavigate={go}
+              onRefresh={() => setRevision((v) => v + 1)}
+            />
+          )}
+          {section === "employees" && (
+            <Employees
+              canEdit={has("Administrator", "HR")}
+              notify={notify}
+              detail={route.detail}
+              onNavigate={go}
+              initialSearch={employeeSearch}
+              timeZone={dashboard.data?.timeZone}
+            />
+          )}
+          {section === "organization" && (
+            <Organization admin={has("Administrator")} notify={notify} />
+          )}
+          {section === "import" && <ImportEmployees notify={notify} />}
+          {section === "users" && <Users notify={notify} />}
+          {section === "audit" && <Audit />}
+          {section === "financial" && <Financial notify={notify} />}
+          {section === "security" && (
+            <PasswordForm
+              onSuccess={() => {
+                setUser(null);
+                setAuthError(
+                  "تم تغيير كلمة المرور. سجل الدخول بالكلمة الجديدة.",
+                );
+              }}
+            />
+          )}
+        </main>
+        <footer className="app-footer">
+          <span>
+            {meta?.name ?? "HR Platform"}
+            <span className="footer-dot" />
+            مساحة عمل أكثر تنظيمًا
+          </span>
+          <span>
+            <Icon name="shield" size={14} />
+            بياناتك تظهر حسب صلاحياتك
+          </span>
+        </footer>
+      </div>
+    </div>
+  );
+}
 
-function useLoad<T>(path:string,revision=0){
-  const [data,setData]=useState<T>();const[error,setError]=useState('');
-  useEffect(()=>{let active=true;setData(undefined);setError('');api<T>(path).then(x=>{if(active)setData(x);}).catch(e=>{if(active)setError(errorText(e));});return()=>{active=false;};},[path,revision]);
-  return{data,error};
-}
-function State({error,loading,children}:{error?:string;loading?:boolean;children:ReactNode}){return error?<p className="error" role="alert">{error}</p>:loading?<p role="status">جارٍ التحميل…</p>:<>{children}</>;}
-function Field({label,children}:{label:string;children:ReactNode}){const id=useId();return <div className="field"><label htmlFor={id}>{label}</label>{isValidElement(children)?cloneElement(children as ReactElement<{id:string}>,{id}):children}</div>;}
-function Pager({page,setPage,total}:{page:number;setPage:(p:number)=>void;total:number}){return <div className="pager"><span>{total} سجل · صفحة {page}</span><button disabled={page<=1} onClick={()=>setPage(page-1)}>السابق</button><button disabled={page*20>=total} onClick={()=>setPage(page+1)}>التالي</button></div>;}
-function SearchPicker({label,name,initial}:{label:string;name:string;initial?:string|null}){
-  const[q,setQ]=useState('');const[selected,setSelected]=useState(initial??'');const{data,error}=useLoad<Page<Employee>>(`/employees?q=${encodeURIComponent(q)}&pageSize=20`);
-  return <div className="field"><span>{label}</span><input aria-label={`بحث ${label}`} value={q} onChange={e=>setQ(e.target.value)} placeholder="ابحث بالاسم أو الرقم"/><select name={name} aria-label={label} value={selected} onChange={e=>setSelected(e.target.value)}><option value="">بدون ربط</option>{selected&&!data?.items.some(e=>e.id===selected)&&<option value={selected}>الربط الحالي</option>}{data?.items.map(e=><option key={e.id} value={e.id}>{e.number} — {e.fullName}</option>)}</select>{error&&<small className="error">{error}</small>}</div>;
-}
-export default function App(){
-  const[user,setUser]=useState<User|null>();const[authError,setAuthError]=useState('');const[section,setSection]=useState('home');const[notice,setNotice]=useState('');const[lang,setLang]=useState<Language>('ar');
-  const{data:meta}=useLoad<{name:string}>('/meta');const t=words[lang];
-  useEffect(()=>{api<User>('/auth/me').then(setUser).catch(()=>setUser(null));},[]);
-  useEffect(()=>{const expired=()=>setUser(null);window.addEventListener('session-expired',expired);return()=>window.removeEventListener('session-expired',expired);},[]);
-  useEffect(()=>{if(meta?.name)document.title=meta.name;},[meta]);
-  useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
-  const has=(...r:string[])=>user?.roles.some(v=>r.includes(v))??false;
-  async function login(e:FormEvent<HTMLFormElement>){e.preventDefault();setAuthError('');const x=formValues(e.currentTarget);try{await api('/auth/login','POST',x);setUser(await api<User>('/auth/me'));}catch(e){setAuthError(errorText(e));}}
-  const links=[['home',t.home],['employees',has('Employee')?'ملفي':t.employees],['security','أمان الحساب'],...(has('Administrator','HR')?[['organization',t.organization],['import',t.import]]:[]),...(has('Administrator','Payroll')?[['financial',t.financial]]:[]),...(has('Administrator')?[['users',t.users],['audit',t.audit]]:[])];
-  if(user===undefined)return <main className="login"><p>جارٍ التحقق من الجلسة…</p></main>;
-  if(user===null)return <main className="login"><div className="login-brand"><span className="brand-icon">HR</span><h1>{meta?.name??'HR Platform'}</h1><p>مساحة العمل لفريقك</p></div><form className="card" onSubmit={login}><span className="eyebrow">بوابة الموارد البشرية</span><h2>{t.login}</h2><p className="muted">استخدم حساب المنشأة للوصول إلى بياناتك بأمان.</p><Field label={t.email}><input name="email" type="email" autoComplete="username" required maxLength={254}/></Field><Field label={t.password}><input name="password" type="password" autoComplete="current-password" required maxLength={256}/></Field>{authError&&<p className="error" role="alert">{authError}</p>}<button className="primary">دخول إلى حسابك</button><p className="muted small">لا يوجد تسجيل عام. ينشئ مسؤول النظام الحسابات.</p></form></main>;
-  return <div className="shell"><aside><div className="brand"><span className="brand-icon">HR</span><div><strong>{meta?.name??'HR Platform'}</strong><small>إدارة الموارد البشرية</small></div></div><span className="nav-caption">مساحة العمل</span><nav>{links.map(([id,label])=><button key={id} className={section===id?'active':''} onClick={()=>{setSection(id);setNotice('');}}><span className="nav-dot"/>{label}</button>)}</nav><div className="sidebar-bottom"><span className="avatar">{user.email[0]?.toUpperCase()}</span><div><strong>{user.email}</strong><small>{user.roles.map(r=>roles[r]).join('، ')}</small></div></div></aside><div className="workspace"><header><div><span className="eyebrow">بوابة المنشأة</span><strong>{links.find(x=>x[0]===section)?.[1]}</strong></div><div className="header-actions"><button onClick={()=>setLang(lang==='ar'?'en':'ar')}>{lang==='ar'?'English':'العربية'}</button><button onClick={async()=>{try{await api('/auth/logout','POST');setUser(null);}catch(e){setNotice(errorText(e));}}}>{t.logout}</button></div></header><main><div className="page-heading"><div><span className="eyebrow">{meta?.name??'HR Platform'} / مساحة العمل</span><h1>{links.find(x=>x[0]===section)?.[1]}</h1><p className="muted">بيانات واضحة، وإجراءات منظمة لفريقك.</p></div><span className="pill">{roles[user.roles[0]]}</span></div>{notice&&<div className="notice" role="status">{notice}<button aria-label="إغلاق التنبيه" onClick={()=>setNotice('')}>×</button></div>}
-  {section==='security'&&<PasswordForm onSuccess={()=>setUser(null)}/>}
-  {section==='home'&&<Overview user={user}/>}{section==='employees'&&<Employees canEdit={has('Administrator','HR')} notify={setNotice}/>}{section==='organization'&&<Organization admin={has('Administrator')} notify={setNotice}/>}{section==='import'&&<ImportEmployees notify={setNotice}/>}{section==='users'&&<Users notify={setNotice}/>}{section==='audit'&&<Audit/>}{section==='financial'&&<Financial notify={setNotice}/>}
-  </main><footer>بوابة المنشأة · إدارة بيانات الفريق</footer></div></div>;
-}
-function Overview({user}:{user:User}){
-  const canRead=user.roles.some(x=>['Administrator','HR','Manager','Employee'].includes(x));
-  return <><div className="welcome card"><span className="eyebrow">أهلًا بك في مساحة العمل</span><h2>فريقك يبدأ من بيانات منظمة.</h2><p>ابدأ بإعداد المنشأة وهيكلها، ثم أضف الموظفين واربط حساباتهم.</p></div>{canRead&&<EmployeeCount/>}<div className="card"><h2>ما المتاح الآن؟</h2><p>إدارة ملفات الموظفين والهيكل التنظيمي والحسابات، مع صلاحيات مستقلة للبيانات المالية ومرفقات خاصة واستيراد Excel.</p><p className="muted">المعلومات المعروضة تُجلب من الخادم حسب نطاق حسابك.</p></div></>;
-}
-function EmployeeCount(){const{data,error}=useLoad<Page<Employee>>('/employees?pageSize=1');return <div className="stat card"><span>الموظفون ضمن نطاقك</span><State error={error} loading={!data}><strong>{data?.total}</strong><span className="muted">سجل موظف</span></State></div>;}
-function Employees({canEdit,notify}:{canEdit:boolean;notify:Notice}){
-  const[q,setQ]=useState('');const[status,setStatus]=useState('');const[page,setPage]=useState(1);const[revision,setRevision]=useState(0);const[selected,setSelected]=useState<Employee|null>();
-  const{data,error}=useLoad<Page<Employee>>(`/employees?q=${encodeURIComponent(q)}&status=${status}&page=${page}`,revision);
-  return <><div className="toolbar"><input aria-label="بحث الموظفين" placeholder="ابحث بالاسم أو الرقم الوظيفي" value={q} onChange={e=>{setQ(e.target.value);setPage(1);}}/><select aria-label="الحالة" value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}><option value="">جميع الحالات</option><option value="Active">نشط</option><option value="Inactive">غير نشط</option><option value="Terminated">منتهي الخدمة</option></select>{canEdit&&<button className="primary" onClick={()=>setSelected(null)}>+ إضافة موظف</button>}</div><section className="card table-card"><State error={error} loading={!data}><div className="table-scroll"><table><thead><tr><th>الرقم الوظيفي</th><th>الموظف</th><th>تاريخ الالتحاق</th><th>الحالة</th><th>الملف</th></tr></thead><tbody>{data?.items.map(e=><tr key={e.id}><td className="mono">{e.number}</td><td><strong>{e.fullName}</strong><small>{e.email||'—'}</small></td><td>{e.joinDate}</td><td><span className={`status ${e.status==='Active'?'good':''}`}>{e.status==='Active'?'نشط':e.status==='Inactive'?'غير نشط':'منتهي الخدمة'}</span></td><td><button onClick={()=>setSelected(e)}>فتح الملف ←</button></td></tr>)}</tbody></table></div>{data?.items.length===0&&<div className="empty"><h3>لا توجد سجلات مطابقة</h3><p>أضف موظفًا أو غيّر معايير البحث.</p></div>}<Pager page={page} setPage={setPage} total={data?.total??0}/></State></section>{selected!==undefined&&<div className="dialog-backdrop"><section className="dialog card" role="dialog" aria-modal="true" aria-label="ملف الموظف"><div className="section-heading"><h2>{selected?.fullName??'إضافة موظف'}</h2><button onClick={()=>setSelected(undefined)}>إغلاق</button></div>{canEdit?<EmployeeForm initial={selected} notify={notify} onSave={()=>{setSelected(undefined);setRevision(r=>r+1);}}/>:<dl><dt>الرقم الوظيفي</dt><dd>{selected?.number}</dd><dt>البريد</dt><dd>{selected?.email||'—'}</dd><dt>الهاتف</dt><dd>{selected?.phone||'—'}</dd><dt>تاريخ الالتحاق</dt><dd>{selected?.joinDate}</dd></dl>}{selected&&<Attachments employee={selected.id} canEdit={canEdit}/>}</section></div>}</>;
-}
-function EmployeeForm({initial,notify,onSave}:{initial:Employee|null;notify:Notice;onSave:()=>void}){
-  const{data,error}=useLoad<Structure>('/structure');const[busy,setBusy]=useState(false);const[message,setMessage]=useState('');
-  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage('');const f=formValues(e.currentTarget);try{await api(`/employees${initial?'/'+initial.id:''}`,initial?'PUT':'POST',{...f,managerId:f.managerId||null,version:initial?.version??null});notify('تم حفظ ملف الموظف.');onSave();}catch(e){setMessage(errorText(e));}finally{setBusy(false);}}
-  return <State error={error} loading={!data}><form onSubmit={submit}><div className="form-grid"><Field label="الرقم الوظيفي"><input name="number" required maxLength={30} defaultValue={initial?.number}/></Field><Field label="الاسم الكامل"><input name="fullName" required maxLength={160} defaultValue={initial?.fullName}/></Field><Field label="البريد الإلكتروني"><input name="email" type="email" maxLength={254} defaultValue={initial?.email}/></Field><Field label="الهاتف"><input name="phone" maxLength={30} defaultValue={initial?.phone}/></Field><Field label="تاريخ الالتحاق"><input name="joinDate" type="date" required defaultValue={initial?.joinDate??date()}/></Field><Field label="الوظيفة"><select name="jobPositionId" required defaultValue={initial?.jobPositionId??''}><option value="">اختر الوظيفة</option>{data?.jobs.map(x=><option key={x.id} value={x.id}>{x.name} — {data.departments.find(d=>d.id===x.departmentId)?.name}</option>)}</select></Field><Field label="الحالة"><select name="status" defaultValue={initial?.status??'Active'}><option value="Active">نشط</option><option value="Inactive">غير نشط</option><option value="Terminated">منتهي الخدمة</option></select></Field><Field label="نوع العقد"><select name="contractType" defaultValue={initial?.contractType??'FixedTerm'}><option value="FixedTerm">محدد المدة</option><option value="Indefinite">غير محدد المدة</option></select></Field><SearchPicker label="المدير المباشر" name="managerId" initial={initial?.managerId}/></div>{!data?.jobs.length&&<p className="error">أضف فرعًا وقسمًا ووظيفة في صفحة الهيكل أولًا.</p>}{message&&<p className="error" role="alert">{message}</p>}<button disabled={busy||!data?.jobs.length} className="primary">{busy?'جارٍ الحفظ…':'حفظ الموظف'}</button></form></State>;
-}
-function Organization({admin,notify}:{admin:boolean;notify:Notice}){
-  const[rev,setRev]=useState(0);const{data:org,error:orgError}=useLoad<Org|null>('/organization',rev);const{data,error}=useLoad<Structure>('/structure',rev);const[busy,setBusy]=useState(false);
-  async function save(e:FormEvent<HTMLFormElement>,path:string,method="POST"){e.preventDefault();const form=e.currentTarget;const x=formValues(form);setBusy(true);try{await api(path,path==='/organization'?'PUT':method,path==='/organization'?{...x,version:org?.version??null}:{...x,parentId:x.parentId||null});notify('تم الحفظ.');form.reset();setRev(r=>r+1);}catch(e){notify(errorText(e));}finally{setBusy(false);}}
-  return <><State error={orgError} loading={org===undefined}>{admin?<form className="card" onSubmit={e=>save(e,'/organization')} key={org?.version}><h2>إعداد المنشأة</h2><div className="form-grid"><Field label="اسم المنشأة"><input required name="name" maxLength={160} defaultValue={org?.name??'HR Platform'}/></Field><Field label="المنطقة الزمنية"><input required name="timeZone" defaultValue={org?.timeZone??'Asia/Riyadh'}/></Field></div><button className="primary" disabled={busy}>حفظ إعداد المنشأة</button></form>:<div className="card"><h2>{org?.name??'لم تُعد المنشأة بعد'}</h2><p>{org?.timeZone}</p></div>}</State><State error={error} loading={!data}><div className="three-columns">{(['branches','departments','jobs']as const).map((kind,i)=><section className="card" key={kind}><h2>{['الفروع','الأقسام','الوظائف'][i]}</h2><ul className="unit-list">{data?.[kind].map(x=><li key={x.id}><strong>{x.name}</strong><small>{kind==='departments'?data.branches.find(p=>p.id===x.branchId)?.name:kind==='jobs'?data.departments.find(p=>p.id===x.departmentId)?.name:''}</small><details><summary>تعديل الاسم</summary><form onSubmit={e=>save(e,`/${kind}/${x.id}`,'PUT')}><input type="hidden" name="version" value={x.version}/><Field label="الاسم الجديد"><input required name="name" defaultValue={x.name} maxLength={160}/></Field><button disabled={busy}>حفظ الاسم</button></form></details></li>)}</ul>{!data?.[kind].length&&<p className="muted">لا توجد سجلات بعد.</p>}<form onSubmit={e=>save(e,`/${kind}`)}><Field label="الاسم"><input name="name" required maxLength={160}/></Field>{i>0&&<Field label={i===1?'الفرع':'القسم'}><select required name="parentId"><option value="">اختر</option>{(i===1?data?.branches:data?.departments)?.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>}<button disabled={busy}>إضافة {['فرع','قسم','وظيفة'][i]}</button></form></section>)}</div></State></>;
-}
-function Attachments({employee,canEdit}:{employee:string;canEdit:boolean}){
-  const[rev,setRev]=useState(0);const[error,setError]=useState('');const{data,error:loadError}=useLoad<{id:string;fileName:string;size:number}[]>(`/employees/${employee}/attachments`,rev);
-  async function upload(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=e.currentTarget;try{await api(`/employees/${employee}/attachments`,'POST',new FormData(form));setRev(x=>x+1);form.reset();setError('');}catch(e){setError(errorText(e));}}
-  return <section className="attachments"><h3>المرفقات الخاصة</h3><State error={loadError} loading={!data}><ul>{data?.map(x=><li key={x.id}><a href={`/api/employees/${employee}/attachments/${x.id}`}>{x.fileName}</a> · {Math.ceil(x.size/1024)} KB</li>)}</ul>{data?.length===0&&<p className="muted">لا توجد مرفقات.</p>}</State>{canEdit&&<form onSubmit={upload}><Field label="ملف PDF أو صورة (حتى 5 MB)"><input type="file" accept=".pdf,.png,.jpg,.jpeg" name="file" required/></Field><button>رفع المرفق</button></form>}{error&&<p role="alert" className="error">{error}</p>}</section>;
-}
-type ImportRow={row:number;error:string|null;employee:{number:string;fullName:string}|null};
-function ImportEmployees({notify}:{notify:Notice}){
-  const[file,setFile]=useState<File>();const[rows,setRows]=useState<ImportRow[]>();const[busy,setBusy]=useState(false);
-  async function run(commit:boolean){if(!file)return;setBusy(true);const f=new FormData();f.append('file',file);try{if(commit){const x=await api<{count:number}>('/import/employees/commit','POST',f);notify(`تم استيراد ${x.count} موظف.`);setRows(undefined);setFile(undefined);}else setRows(await api<ImportRow[]>('/import/employees/preview','POST',f));}catch(e){notify(errorText(e));}finally{setBusy(false);}}
-  return <section className="card"><h2>استيراد من Excel</h2><p>نزّل القالب، وأدخل معرف الوظيفة من القائمة أدناه. التاريخ بصيغة YYYY-MM-DD. الحد 2000 موظف و2 MB. الحفظ يعيد التحقق من الملف كاملًا، ولا يحفظ أي صف عند وجود خطأ.</p><a href="/api/import/employees/template" className="button">تنزيل القالب</a><JobIds/><Field label="ملف الموظفين"><input type="file" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]);setRows(undefined);}}/></Field><button disabled={!file||busy} onClick={()=>run(false)}>معاينة وفحص الأخطاء</button>{rows&&<><div className="table-scroll"><table><thead><tr><th>الصف</th><th>الرقم</th><th>الاسم</th><th>النتيجة</th></tr></thead><tbody>{rows.map(x=><tr key={x.row}><td>{x.row}</td><td>{x.employee?.number}</td><td>{x.employee?.fullName}</td><td className={x.error?'error':''}>{x.error??'صالح'}</td></tr>)}</tbody></table></div><button className="primary" disabled={busy||rows.some(x=>x.error!==null)||rows.length===0} onClick={()=>run(true)}>حفظ {rows.length} موظف</button></>}</section>;
-}
-function JobIds(){const{data}=useLoad<Structure>('/structure');return <details><summary>معرفات الوظائف للقالب</summary>{data?.jobs.map(x=><p key={x.id}>{x.name}: <code>{x.id}</code></p>)}</details>;}
-type Account={id:string;email:string;roles:string[];isActive:boolean;employeeId:string|null};
-function Users({notify}:{notify:Notice}){
-  const[rev,setRev]=useState(0);const[page,setPage]=useState(1);const{data,error}=useLoad<Page<Account>>(`/users?page=${page}`,rev);const[busy,setBusy]=useState(false);
-  async function create(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=e.currentTarget;const f=formValues(form);setBusy(true);try{await api('/users','POST',{...f,employeeId:f.employeeId||null});form.reset();setRev(x=>x+1);notify('تم إنشاء الحساب.');}catch(e){notify(errorText(e));}finally{setBusy(false);}}
-  return <><form className="card" onSubmit={create}><h2>إنشاء حساب</h2><div className="form-grid"><Field label="البريد الإلكتروني"><input type="email" name="email" required maxLength={254}/></Field><Field label="كلمة مرور أولية قوية"><input type="password" name="password" autoComplete="new-password" required minLength={12} maxLength={256}/></Field><Field label="الدور"><select name="role">{Object.entries(roles).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field><SearchPicker label="الموظف المرتبط" name="employeeId"/></div><p className="muted">دور واحد للحساب. الموظف والمدير يتطلبان ملف موظف مرتبطًا. يفضل تسليم كلمة المرور عبر قناة آمنة.</p><button disabled={busy} className="primary">إنشاء الحساب</button></form><div className="card"><State error={error} loading={!data}><div className="table-scroll"><table><thead><tr><th>الحساب</th><th>الصلاحية</th><th>الحالة</th><th>تغيير الدور</th></tr></thead><tbody>{data?.items.map(u=><tr key={u.id}><td>{u.email}</td><td>{u.roles.map(x=>roles[x]).join('، ')}</td><td><span>{u.isActive?'نشط':'معطل'}</span><button onClick={async()=>{try{await api(`/users/${u.id}/active`,'PUT',{isActive:!u.isActive});setRev(x=>x+1);notify(u.isActive?'تم تعطيل الحساب وإبطال جلساته.':'تم تفعيل الحساب.');}catch(e){notify(errorText(e));}}}>{u.isActive?'تعطيل':'تفعيل'}</button></td><td><form onSubmit={async e=>{e.preventDefault();try{await api(`/users/${u.id}/role`,'PUT',formValues(e.currentTarget));setRev(x=>x+1);notify('تم تغيير الدور وإبطال الجلسات السابقة.');}catch(e){notify(errorText(e));}}}><select name="role" defaultValue={u.roles[0]} aria-label={`دور ${u.email}`}>{Object.entries(roles).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button>تطبيق</button></form></td></tr>)}</tbody></table></div><Pager page={page} setPage={setPage} total={data?.total??0}/></State></div></>;
-}
-function Audit(){const[page,setPage]=useState(1);const{data,error}=useLoad<Page<{id:number;occurredAt:string;actorId:string;action:string;entityId:string}>>(`/audit?page=${page}`);return <div className="card"><State error={error} loading={!data}><div className="table-scroll"><table><thead><tr><th>التوقيت</th><th>العملية</th><th>الحساب</th><th>السجل</th></tr></thead><tbody>{data?.items.map(x=><tr key={x.id}><td>{new Date(x.occurredAt).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh'})}</td><td>{x.action}</td><td className="mono">{x.actorId}</td><td className="mono">{x.entityId}</td></tr>)}</tbody></table></div><div className="pager"><span>{data?.total??0} عملية · صفحة {page}</span><button disabled={page===1} onClick={()=>setPage(x=>x-1)}>السابق</button><button disabled={page*50>=(data?.total??0)} onClick={()=>setPage(x=>x+1)}>التالي</button></div></State></div>;}
-type FinancialData={version:string;baseSalary:string;bank:string;iban:string;effectiveFrom:string};
-function PasswordForm({onSuccess}:{onSuccess:()=>void}){
-  const[error,setError]=useState('');const[busy,setBusy]=useState(false);
-  return <form className="card" onSubmit={async e=>{e.preventDefault();const f=formValues(e.currentTarget);setBusy(true);setError('');try{await api('/auth/password','POST',f);onSuccess();}catch(e){setError(errorText(e));}finally{setBusy(false);}}}><h2>تغيير كلمة المرور</h2><p className="muted">تُنهى جميع جلسات الحساب بعد التغيير. سجل الدخول بكلمة المرور الجديدة.</p><div className="form-grid"><Field label="كلمة المرور الحالية"><input type="password" name="currentPassword" autoComplete="current-password" required maxLength={256}/></Field><Field label="كلمة المرور الجديدة"><input type="password" name="newPassword" autoComplete="new-password" required minLength={12} maxLength={256}/></Field></div>{error&&<p className="error" role="alert">{error}</p>}<button className="primary" disabled={busy}>تغيير كلمة المرور وإنهاء الجلسات</button></form>;
-}
-function Financial({notify}:{notify:Notice}){
-  const[q,setQ]=useState('');const[page,setPage]=useState(1);const[id,setId]=useState('');const{data,error}=useLoad<Page<{id:string;number:string;fullName:string}>>(`/financial/employees?q=${encodeURIComponent(q)}&page=${page}`);
-  return <><p className="notice">هذه بيانات الراتب الأساسية الحالية، وليست مسير رواتب أو كشف راتب. حفظ التاريخ لا ينفذ احتسابًا بأثر رجعي.</p><div className="toolbar"><input aria-label="بحث البيانات المالية" placeholder="ابحث عن الموظف" value={q} onChange={e=>{setQ(e.target.value);setPage(1);}}/></div><div className="card"><State error={error} loading={!data}>{data?.items.map(x=><button className="employee-choice" key={x.id} onClick={()=>setId(x.id)}>{x.number} — {x.fullName}</button>)}{data?.items.length===0&&<p>لا توجد سجلات.</p>}<Pager page={page} setPage={setPage} total={data?.total??0}/></State></div>{id&&<FinancialForm key={id} id={id} notify={notify}/>}</>;
-}
-function FinancialForm({id,notify}:{id:string;notify:Notice}){
-  const[rev,setRev]=useState(0);const{data,error}=useLoad<FinancialData|null>(`/employees/${id}/financial`,rev);const[busy,setBusy]=useState(false);
-  return <State error={error} loading={data===undefined}><form key={data?.version} className="card" onSubmit={async e=>{e.preventDefault();const f=formValues(e.currentTarget);setBusy(true);try{await api(`/employees/${id}/financial`,'PUT',{...f,version:data?.version??null});setRev(x=>x+1);notify('تم حفظ البيانات المالية.');}catch(e){notify(errorText(e));}finally{setBusy(false);}}}><h2>بيانات مالية مقيدة</h2><div className="form-grid"><Field label="الراتب الأساسي (ريال)"><input name="baseSalary" inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" required defaultValue={data?.baseSalary??'0.00'}/></Field><Field label="تاريخ السريان"><input name="effectiveFrom" type="date" required defaultValue={data?.effectiveFrom??date()}/></Field><Field label="البنك"><input name="bank" maxLength={120} defaultValue={data?.bank}/></Field><Field label="IBAN سعودي"><input name="iban" dir="ltr" maxLength={30} defaultValue={data?.iban}/></Field></div><button disabled={busy} className="primary">حفظ البيانات المالية</button></form></State>;
+function Login({
+  name,
+  error,
+  onSubmit,
+}: {
+  name: string;
+  error: string;
+  onSubmit: (x: Record<string, string>) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [visible, setVisible] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onSubmit(formValues(e.currentTarget));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="login-page">
+      <section className="login-brand-panel">
+        <div className="brand">
+          <span className="brand-icon">HR</span>
+          <div>
+            <strong>{name}</strong>
+            <small>إدارة الموارد البشرية</small>
+          </div>
+        </div>
+        <div className="login-brand-copy">
+          <span className="hero-label">
+            <span />
+            مساحة عمل واحدة لفريقك
+          </span>
+          <h1>
+            كل تفاصيل فريقك،
+            <br />
+            <em>في مكان واحد.</em>
+          </h1>
+          <p>نظّم بيانات منشأتك وموظفيك، وامنح كل شخص الوصول المناسب لعمله.</p>
+          <div className="login-features">
+            <span>
+              <Icon name="users" size={19} />
+              ملفات موظفين منظمة
+            </span>
+            <span>
+              <Icon name="building" size={19} />
+              هيكل واضح للمنشأة
+            </span>
+            <span>
+              <Icon name="shield" size={19} />
+              صلاحيات تحفظ الخصوصية
+            </span>
+          </div>
+        </div>
+        <div className="login-brand-footer">
+          <span>{name}</span>
+          <small>أعمال أكثر وضوحًا. فريق أقرب.</small>
+        </div>
+      </section>
+      <section className="login-form-panel">
+        <div className="login-form-wrap">
+          <span className="login-lock">
+            <Icon name="lock" size={25} />
+          </span>
+          <span className="eyebrow">أهلًا بعودتك</span>
+          <h2>تسجيل الدخول</h2>
+          <p className="login-description">ادخل إلى مساحة عملك وابدأ يومك.</p>
+          <form onSubmit={submit}>
+            <Field label="البريد الإلكتروني" required>
+              <input
+                name="email"
+                type="email"
+                autoComplete="username"
+                required
+                maxLength={254}
+                placeholder="name@company.com"
+                dir="ltr"
+              />
+            </Field>
+            <Field label="كلمة المرور" required controlId="login-password">
+              <div className="password-field">
+                <input
+                  id="login-password"
+                  name="password"
+                  aria-label="كلمة المرور"
+                  type={visible ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  maxLength={256}
+                  placeholder="أدخل كلمة المرور"
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={
+                    visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"
+                  }
+                  aria-pressed={visible}
+                  onClick={() => setVisible((v) => !v)}
+                >
+                  <Icon name="eye" size={19} />
+                </button>
+              </div>
+            </Field>
+            {error && (
+              <div className="error" role="alert">
+                <Icon name="activity" size={18} />
+                <span>{error}</span>
+              </div>
+            )}
+            <button
+              className="primary login-submit"
+              disabled={busy}
+              type="submit"
+            >
+              {busy ? (
+                <>
+                  <span className="spinner" />
+                  جارٍ التحقق…
+                </>
+              ) : (
+                <>
+                  دخول إلى حسابك
+                  <Icon name="arrow" size={18} />
+                </>
+              )}
+            </button>
+          </form>
+          <div className="login-help">
+            <Icon name="shield" size={17} />
+            <p>
+              لإنشاء حساب أو استعادة الوصول، تواصل مع مسؤول النظام في منشأتك.
+            </p>
+          </div>
+        </div>
+        <div className="login-form-footer">
+          {name}
+          <span />
+          بوابة المنشأة
+        </div>
+      </section>
+    </main>
+  );
 }

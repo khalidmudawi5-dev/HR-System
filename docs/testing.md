@@ -22,10 +22,16 @@ node scripts/browser-smoke.cjs
 
 On the cloud machine a system Chromium is available; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium` for that command. BrowserHost is explicitly test-only, exposes synthetic test accounts and must never be published as the application. Stop it after testing. Its data is disposable and does not touch SQL Server. Run the browser flow against a fresh host; its employee number is deliberately fixed so repeated runs detect duplicate persistence.
 
-The flow checks login, organization save, employee creation/search/reload, mobile layout, employee isolation and PWA cache. Screenshots/results are generated in .local/browser and excluded from Git. No localhost preview links are published by cloud onboarding.
+The flow checks login, real dashboard metrics and their refresh after employee creation, organization save, directory filters/reset, deep profile routes after reload, unsaved-change discard, mobile navigation/profile scrolling, employee isolation and PWA cache. It also checks for JavaScript errors and observed CSP violations. Screenshots/results are generated in .local/browser and excluded from Git. No localhost preview links are published by cloud onboarding.
 
 ## Required SQL Server acceptance (pending access)
 
 On an approved new HRPlatform_* database: run the guarded migration and bootstrap commands; run organization/employee/import/account flows; check unique constraints and concurrent updates; restart and confirm persistence; backup and restore to a separate approved test database; compare row counts and functional behavior. Record server build, OS, commands, pass/fail and restore evidence in validation.md. Do not interpret SQLite results or a generated SQL script as these checks.
 
 Attendance, leave approvals, payroll, device integration and the 1,000-employee load benchmark belong to later phases and have not executed.
+
+## ZIP updater file safety
+
+`powershell -NoProfile -File tests/Update-LocalProject.Tests.ps1` uses disposable source files and ZIP archives, never customer databases. It exercises preview, checksum failure, archive traversal rejection, source backup and private/configuration exclusions, incomplete packages and refusal of Git checkouts. It needs no Pester dependency. These checks ran in an isolated PowerShell SDK 7.6.7 host on Linux; the Windows PowerShell 5.1 build command branch remains a local verification step.
+
+Dashboard API fixtures inject a fixed TimeProvider: 30 September at 22:00 UTC is 1 October in Riyadh. The monthly metric includes the current local date and excludes a future joiner. Scope assertions test actual responses for Administrator, HR, Manager, Employee and Payroll; directory filters must never widen that scope.

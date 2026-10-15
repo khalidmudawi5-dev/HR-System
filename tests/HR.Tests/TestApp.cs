@@ -39,7 +39,7 @@ public class TestApp : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddDbContext<HrDbContext>(o=>o.UseSqlite(connection.ConnectionString));
         });
     }
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         using var scope=Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<HrDbContext>();await db.Database.EnsureCreatedAsync();
         var roles=scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();var users=scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

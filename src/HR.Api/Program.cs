@@ -21,6 +21,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.ConfigureHttpJsonOptions(o=>o.SerializerOptions.NumberHandling=System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString);
 builder.Services.AddDbContext<HrDbContext>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Hr")));
 builder.Services.AddScoped<EmployeeService>(); builder.Services.AddScoped<ExcelEmployees>();
+builder.Services.AddScoped<DashboardService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentity<ApplicationUser,IdentityRole>(o=>{
     o.Password.RequiredLength=12; o.Password.RequireNonAlphanumeric=true;
     o.Lockout.MaxFailedAccessAttempts=5; o.Lockout.DefaultLockoutTimeSpan=TimeSpan.FromMinutes(15);

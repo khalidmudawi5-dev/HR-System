@@ -4,7 +4,7 @@ Each cloud task is isolated. Use the existing checkout at /workspace/HR-System; 
 
 Retained artifacts: .NET SDK under /workspace/tooling/dotnet, NuGet/npm caches, restored dependencies, source, generated SQL migration, web/dist and src/HR.Api/wwwroot. Processes do not survive snapshots; restart only the services needed for the task.
 
-The user's SQL Server is on their local Windows computer. No usable cloud SQL connection or approved database name has been supplied. Do not invent credentials, expose SQL publicly, create a production substitute database, or describe SQLite tests as SQL Server validation. docs/windows-setup.md contains the real SQL setup steps. Actual SQL readiness remains blocked until secure connectivity/configuration is supplied and its independent database name is approved.
+The user's SQL Server is on their local Windows computer. The user approved the independent database HRPlatform_Dev on KHALID-OSMAN with Windows Authentication, and reported local migration and login success. There is no usable SQL connection from this cloud machine. Do not invent credentials, expose SQL publicly, create a production substitute database, or describe SQLite tests as SQL Server validation. docs/windows-setup.md contains the real SQL setup steps. Complete SQL acceptance and backup/restore checks still need execution in the authorized Windows environment. Do not ask again for a database name already approved in this session.
 
 For the verified independent development workflow, run from /workspace/HR-System:
 

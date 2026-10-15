@@ -9,18 +9,22 @@ public static class EmployeeEndpoints
 {
     public static void MapEmployees(this WebApplication app)
     {
-        app.MapGet("/api/employees",async(string? q,string? status,Guid? jobId,int? page,int? pageSize,ClaimsPrincipal u,EmployeeService service)=>{
+        app.MapGet("/api/employees",async(string? q,string? status,Guid? jobId,Guid? branchId,Guid? departmentId,string? sort,int? page,int? pageSize,ClaimsPrincipal u,EmployeeService service)=>{
             var n=Math.Clamp(page ?? 1,1,100000);var size=Math.Clamp(pageSize ?? 20,1,100);
             var query=service.Visible(u).AsNoTracking();
             if(!string.IsNullOrWhiteSpace(q)) {var text=q.Trim();if(text.Length>160) throw new RuleException("البحث طويل جدًا.");query=query.Where(x=>x.FullName.Contains(text)||x.Number.Contains(text));}
             if(!string.IsNullOrWhiteSpace(status)) query=query.Where(x=>x.Status==status);
             if(jobId.HasValue) query=query.Where(x=>x.JobPositionId==jobId);
-            var count=await query.CountAsync();var rows=await query.OrderBy(x=>x.Number).Skip((n-1)*size).Take(size).ToListAsync();
-            return Results.Ok(new{total=count,page=n,pageSize=size,items=rows.Select(Rules.View)});
+            if(branchId.HasValue) query=query.Where(x=>x.JobPosition.Department.BranchId==branchId);
+            if(departmentId.HasValue) query=query.Where(x=>x.JobPosition.DepartmentId==departmentId);
+            var count=await query.CountAsync();
+            var ordered=sort switch { "name"=>query.OrderBy(x=>x.FullName).ThenBy(x=>x.Number),"newest"=>query.OrderByDescending(x=>x.JoinDate).ThenBy(x=>x.Number),_=>query.OrderBy(x=>x.Number) };
+            var rows=await ordered.Skip((n-1)*size).Take(size).Include(x=>x.JobPosition).ThenInclude(x=>x.Department).ThenInclude(x=>x.Branch).Include(x=>x.Manager).ToListAsync();
+            return Results.Ok(new{total=count,page=n,pageSize=size,items=rows.Select(e=>Rules.View(e) with{CanReadAttachments=Access.IsHr(u)||e.UserId==Access.UserId(u)})});
         }).RequireAuthorization();
         app.MapGet("/api/employees/{id:guid}",async(Guid id,ClaimsPrincipal u,EmployeeService service)=>{
-            var e=await service.Visible(u).AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id);
-            return e is null ? Results.NotFound() : Results.Ok(Rules.View(e));
+            var e=await service.Visible(u).AsNoTracking().Include(x=>x.JobPosition).ThenInclude(x=>x.Department).ThenInclude(x=>x.Branch).Include(x=>x.Manager).SingleOrDefaultAsync(x=>x.Id==id);
+            return e is null ? Results.NotFound() : Results.Ok(Rules.View(e) with{CanReadAttachments=Access.IsHr(u)||e.UserId==Access.UserId(u)});
         }).RequireAuthorization();
         app.MapPost("/api/employees",async(EmployeeInput x,EmployeeService service)=>Results.Ok(Rules.View(await service.Save(x)))).RequireAuthorization("HR");
         app.MapPut("/api/employees/{id:guid}",async(Guid id,EmployeeInput x,EmployeeService service)=>Results.Ok(Rules.View(await service.Save(x,id)))).RequireAuthorization("HR");

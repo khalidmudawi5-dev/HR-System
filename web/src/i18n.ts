@@ -1,3 +1,46 @@
-export type Language='ar'|'en';
-export const words={ar:{home:'نظرة عامة',employees:'الموظفون',organization:'المنشأة والهيكل',users:'الحسابات والصلاحيات',audit:'سجل التدقيق',import:'استيراد الموظفين',financial:'البيانات المالية',logout:'تسجيل الخروج',save:'حفظ',search:'ابحث بالاسم أو الرقم الوظيفي',empty:'لا توجد سجلات مطابقة',previous:'السابق',next:'التالي',login:'تسجيل الدخول',email:'البريد الإلكتروني',password:'كلمة المرور'},en:{home:'Overview',employees:'Employees',organization:'Organization',users:'Users & roles',audit:'Audit log',import:'Import employees',financial:'Financial records',logout:'Sign out',save:'Save',search:'Search name or employee number',empty:'No matching records',previous:'Previous',next:'Next',login:'Sign in',email:'Email',password:'Password'}};
-export const roles:Record<string,string>={Administrator:'مدير النظام',HR:'الموارد البشرية',Payroll:'مسؤول الرواتب',Manager:'مدير مباشر',Employee:'موظف'};
+export type Language = "ar" | "en";
+export const words = {
+  ar: {
+    home: "نظرة عامة",
+    employees: "الموظفون",
+    organization: "المنشأة والهيكل",
+    users: "الحسابات والصلاحيات",
+    audit: "سجل التدقيق",
+    import: "استيراد الموظفين",
+    financial: "البيانات المالية",
+    logout: "تسجيل الخروج",
+    save: "حفظ",
+    search: "ابحث بالاسم أو الرقم الوظيفي",
+    empty: "لا توجد سجلات مطابقة",
+    previous: "السابق",
+    next: "التالي",
+    login: "تسجيل الدخول",
+    email: "البريد الإلكتروني",
+    password: "كلمة المرور",
+  },
+  en: {
+    home: "Overview",
+    employees: "Employees",
+    organization: "Organization",
+    users: "Users & roles",
+    audit: "Audit log",
+    import: "Import employees",
+    financial: "Financial records",
+    logout: "Sign out",
+    save: "Save",
+    search: "Search name or employee number",
+    empty: "No matching records",
+    previous: "Previous",
+    next: "Next",
+    login: "Sign in",
+    email: "Email",
+    password: "Password",
+  },
+};
+export const roles: Record<string, string> = {
+  Administrator: "مدير النظام",
+  HR: "الموارد البشرية",
+  Payroll: "مسؤول الرواتب",
+  Manager: "مدير مباشر",
+  Employee: "موظف",
+};
