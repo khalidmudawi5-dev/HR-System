@@ -26,12 +26,16 @@
 
 ## التحقق والحدود
 
-لم ينفذ تثبيت الشهادة أو ربطها أو إعادة التشغيل على جهاز المستخدم بعد. فحص الصياغة بمحلل PowerShell الرسمي اكتمل دون أخطاء، لكنه لا يثبت صحة تشغيل إدارة شهادات Windows أو صلاحيات المفتاح أو بدء SQL. تحتاج الخطوات موافقة المستخدم ثم تحقق فعلي من الاتصال والترحيل. المتابعة المسجلة: نجحت اختبارات Windows الـ22 واختبارات الواجهة الـ7 وبناء React على جهاز المستخدم، لكن SQL migration توقف عند التحقق من الشهادة.
+وافق المستخدم على تثبيت شهادة التطوير وإعادة تشغيل SQL. المحاولة الأولى توقفت عند افتراض نوع كائن RSA قبل تغيير صلاحيات المفتاح أو تثبيت الثقة أو ربط الخدمة أو إعادة تشغيلها. يستخدم GetRSAPrivateKey في .NET Framework مسار CNG عند توفره، وقد يعيد RSACng حتى عند الوصول إلى مفتاح CAPI. صُححت الأداة لقراءة بيانات مفتاح SChannel CSP الموجود عبر PrivateKey؛ ما زالت تتحقق من MachineKeyStore واسم المزود وKeyExchange ووجود ملف المفتاح قبل منح قراءة المفتاح للخدمة. لا تصدّر مادة المفتاح الخاص.
+
+فحص الصياغة بمحلل PowerShell الرسمي اكتمل دون أخطاء، لكنه لا يثبت صحة تشغيل إدارة شهادات Windows أو صلاحيات المفتاح أو بدء SQL. إعادة تشغيل الأداة المصححة على Windows ثم الربط والتحقق من الاتصال والترحيل ما زالت مطلوبة؛ لا حاجة إلى إعادة طلب الموافقة الممنوحة على نفس الإجراء. المتابعة المسجلة: نجحت اختبارات Windows الـ22 واختبارات الواجهة الـ7 وبناء React على جهاز المستخدم، لكن SQL migration توقف عند التحقق من الشهادة.
 
 المصادر الرسمية التي روجعت في 2026-10-15:
 
 - https://learn.microsoft.com/sql/database-engine/configure-windows/configure-sql-server-encryption
 - https://learn.microsoft.com/sql/database-engine/configure-windows/certificate-requirements
 - https://learn.microsoft.com/sql/database-engine/configure-windows/manage-certificates
+- https://github.com/microsoft/referencesource/blob/main/System.Core/System/Security/Cryptography/X509Certificates/RSACertificateExtensions.cs
+- https://github.com/microsoft/referencesource/blob/main/System/security/system/security/cryptography/x509/x509certificate2.cs
 
 تمت مراجعة النصوص الحالية من مستودع MicrosoftDocs/sql-docs الرسمي (الفرع live) عند إعداد هذه التعليمات.

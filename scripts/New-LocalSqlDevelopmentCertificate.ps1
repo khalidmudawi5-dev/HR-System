@@ -29,7 +29,7 @@ $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
 if ($null -eq $service) { throw 'SQL service was not found.' }
 $dependencies = @((Get-Service $serviceName).DependentServices | Where-Object { $_.Status -eq 'Running' } | Select-Object -ExpandProperty Name)
 $fqdn = [System.Net.Dns]::GetHostEntry('').HostName
-$dnsNames = @($machineName, $fqdn, 'localhost') | Select-Object -Unique
+$dnsNames = @($machineName, $fqdn, 'localhost') | Sort-Object -Unique
 $certificateFolder = Join-Path $env:ProgramData "HRPlatform\LocalSqlTls\$InstanceName"
 $recordPath = Join-Path $certificateFolder 'certificate.json'
 
@@ -79,12 +79,20 @@ try {
         CertStoreLocation = 'Cert:\LocalMachine\My'
     }
     $certificate = New-SelfSignedCertificate @certificateParams
-    $privateKey = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificate)
+    # The modern RSA extension may expose a legacy CSP key as RSACng on .NET Framework.
+    # This certificate deliberately uses the SChannel CSP required by SQL Server, so read
+    # its persisted CAPI metadata through PrivateKey instead of guessing from that wrapper.
+    $privateKey = $certificate.PrivateKey
     try {
-        if ($privateKey -isnot [System.Security.Cryptography.RSACryptoServiceProvider] -or -not $privateKey.CspKeyContainerInfo.MachineKeyStore) {
-            throw 'The certificate does not have the expected machine CSP key.'
+        if ($privateKey -isnot [System.Security.Cryptography.RSACryptoServiceProvider]) {
+            throw 'Cannot read the expected SChannel CSP metadata from the new certificate.'
         }
-        $keyFile = Join-Path $env:ProgramData ('Microsoft\Crypto\RSA\MachineKeys\' + $privateKey.CspKeyContainerInfo.UniqueKeyContainerName)
+        $keyInfo = $privateKey.CspKeyContainerInfo
+        if (-not $keyInfo.MachineKeyStore -or $keyInfo.ProviderName -ne $certificateParams.Provider -or $keyInfo.KeyNumber -ne [System.Security.Cryptography.KeyNumber]::Exchange) {
+            throw ('Unexpected key metadata: Provider={0}; MachineKeyStore={1}; KeyNumber={2}' -f $keyInfo.ProviderName, $keyInfo.MachineKeyStore, $keyInfo.KeyNumber)
+        }
+        $keyFile = Join-Path $env:ProgramData ('Microsoft\Crypto\RSA\MachineKeys\' + $keyInfo.UniqueKeyContainerName)
+        if (-not (Test-Path -LiteralPath $keyFile -PathType Leaf)) { throw 'The persisted machine private-key file was not found. No ACL changed.' }
         $keyAcl = Get-Acl $keyFile
         $access = New-Object Security.AccessControl.FileSystemAccessRule($service.StartName, 'Read', 'Allow')
         $keyAcl.AddAccessRule($access)
