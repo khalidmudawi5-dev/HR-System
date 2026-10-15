@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><UserSecretsId>HRPlatform-Development</UserSecretsId></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../HR.Infrastructure/HR.Infrastructure.csproj" /><PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" PrivateAssets="all" /></ItemGroup>
+</Project>
