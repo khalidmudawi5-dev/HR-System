@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -32,7 +33,10 @@ public class TestApp : WebApplicationFactory<Program>, IAsyncLifetime
         builder.ConfigureTestServices(services=>{
             services.AddSingleton<IStartupFilter,ClientIpFilter>();
             services.RemoveAll<DbContextOptions<HrDbContext>>(); services.RemoveAll<IDbContextOptionsConfiguration<HrDbContext>>();
-            services.AddDbContext<HrDbContext>(o=>o.UseSqlite($"Data Source={Path.Combine(Root,"tests.db")}"));
+            // Pooled native SQLite handles keep tests.db locked after the host stops on Windows.
+            // Disable pooling only for this disposable test database, without clearing other hosts' pools.
+            var connection=new SqliteConnectionStringBuilder{DataSource=Path.Combine(Root,"tests.db"),Pooling=false};
+            services.AddDbContext<HrDbContext>(o=>o.UseSqlite(connection.ConnectionString));
         });
     }
     public async Task InitializeAsync()

@@ -37,7 +37,9 @@ public class ApiTests : IClassFixture<TestApp>
     {
         using var c=app.Client();Assert.Equal(HttpStatusCode.Unauthorized,(await c.GetAsync("/api/employees")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await c.PostAsJsonAsync("/api/auth/login",new{email="x",password="x"})).StatusCode);
-        Assert.Equal("no-store",(await c.GetAsync("/api/meta")).Headers.CacheControl!.ToString());
+        var response=await c.GetAsync("/api/meta");
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        Assert.True(response.Headers.CacheControl.NoCache);
     }
     [Fact] public async Task Cookies_are_secure_and_login_works()
     {
@@ -152,6 +154,22 @@ public class ApiTests : IClassFixture<TestApp>
     [Fact] public async Task Unknown_api_route_returns_404_and_never_the_spa()
     {
         using var c=app.Client();Assert.Equal(HttpStatusCode.NotFound,(await c.GetAsync("/api/not-a-route")).StatusCode);
+    }
+    [Fact] public async Task Isolated_host_releases_database_file_and_removes_its_directory()
+    {
+        var isolated=new TestApp();
+        try
+        {
+            await isolated.InitializeAsync();
+            using(var c=isolated.Client()) (await c.GetAsync("/api/health")).EnsureSuccessStatusCode();
+            using(var scope=isolated.Services.CreateScope())
+                await scope.ServiceProvider.GetRequiredService<HrDbContext>().Employees.CountAsync();
+            // Windows requires all SQLite handles to be closed before this exclusive file open succeeds.
+            using var databaseFile=new FileStream(Path.Combine(isolated.Root,"tests.db"),FileMode.Open,FileAccess.ReadWrite,FileShare.None);
+            Assert.True(databaseFile.Length>0);
+        }
+        finally { await ((IAsyncLifetime)isolated).DisposeAsync(); }
+        Assert.False(Directory.Exists(isolated.Root));
     }
     [Fact] public async Task Structure_rename_checks_version_and_parent_remains_unchanged()
     {

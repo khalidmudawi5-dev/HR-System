@@ -66,7 +66,11 @@ app.Use(async(ctx,next)=>{
     ctx.Response.Headers.XContentTypeOptions="nosniff";
     ctx.Response.Headers["Referrer-Policy"]="same-origin";
     ctx.Response.Headers.ContentSecurityPolicy="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
-    if(ctx.Request.Path.StartsWithSegments("/api")) ctx.Response.Headers.CacheControl="no-store";
+    if(ctx.Request.Path.StartsWithSegments("/api"))
+    {
+        ctx.Response.Headers.CacheControl="no-cache, no-store";
+        ctx.Response.Headers.Pragma="no-cache";
+    }
     try { await next(); }
     catch(Exception e) when(e is RuleException or DbUpdateException or InvalidDataException or FormatException)
     {

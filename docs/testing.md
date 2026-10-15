@@ -2,6 +2,8 @@
 
 `dotnet test HRPlatform.sln --no-restore` runs xUnit API/infrastructure tests on SQLite. Each factory creates its own synthetic database and private storage, then removes them. Real SQL Server is not contacted. Per-client IPs are injected by test-only middleware to exercise the production login limiter without making the whole suite one client.
 
+SQLite connection pooling is disabled for these disposable test databases so native handles close when scopes finish. Pooled handles previously caused Windows to reject directory cleanup after all assertions passed. The regression test opens the database file exclusively after scoped access and verifies that disposing the isolated host removes its directory. Other hosts' pools and the production SQL Server configuration are untouched.
+
 `cd web && npm test` runs Vitest/Testing Library UI and request-client tests. These verify command submission, error handling, authorization navigation and import-error gating; they do not replace server authorization tests.
 
 ## Browser flow
