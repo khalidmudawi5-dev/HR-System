@@ -22,6 +22,8 @@ builder.Services.ConfigureHttpJsonOptions(o=>o.SerializerOptions.NumberHandling=
 builder.Services.AddDbContext<HrDbContext>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Hr")));
 builder.Services.AddScoped<EmployeeService>(); builder.Services.AddScoped<ExcelEmployees>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<AttendanceImport>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentity<ApplicationUser,IdentityRole>(o=>{
     o.Password.RequiredLength=12; o.Password.RequireNonAlphanumeric=true;
@@ -39,6 +41,7 @@ builder.Services.ConfigureApplicationCookie(o=>{
 builder.Services.AddAntiforgery(o=>{o.HeaderName="X-CSRF-TOKEN";o.Cookie.SameSite=SameSiteMode.Strict;
     o.Cookie.SecurePolicy=builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing") ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;});
 builder.Services.AddAuthorization(o=>{
+    o.AddPolicy("Attendance",p=>p.RequireRole("Administrator","HR","Manager","Employee"));
     o.AddPolicy("HR",p=>p.RequireRole("Administrator","HR"));
     o.AddPolicy("Payroll",p=>p.RequireRole("Administrator","Payroll"));
     o.AddPolicy("Admin",p=>p.RequireRole("Administrator"));
@@ -96,7 +99,7 @@ app.Use(async(ctx,next)=>{
     }
     await next();
 });
-app.MapGet("/api/meta",(IConfiguration c)=>new{name=c["Product:Name"] ?? "HR Platform",phase=1});
+app.MapGet("/api/meta",(IConfiguration c)=>new{name=c["Product:Name"] ?? "HR Platform",phase=2});
 app.MapGet("/api/manifest",(IConfiguration c)=>Results.Json(new{
     id="/",name=c["Product:Name"] ?? "HR Platform",short_name=c["Product:Name"] ?? "HR Platform",
     start_url="/",scope="/",display="standalone",lang="ar",dir="rtl",background_color="#f5f6f3",theme_color="#123f3c",
@@ -117,7 +120,7 @@ app.MapGet("/api/health",async(HrDbContext db)=>{
     try { return await db.Database.CanConnectAsync() ? Results.Ok(new{database="reachable"}) : Results.Json(new{database="unavailable"},statusCode:503); }
     catch { return Results.Json(new{database="unconfigured"},statusCode:503); }
 });
-app.MapFoundation(); app.MapEmployees(); app.MapIdentityAdmin();
+app.MapFoundation(); app.MapEmployees(); app.MapIdentityAdmin(); app.MapAttendance();
 app.UseDefaultFiles(); app.UseStaticFiles();
 app.MapFallback("/api/{**path}",()=>Results.NotFound());
 app.MapFallbackToFile("index.html");

@@ -482,6 +482,18 @@ export function Overview({
               <h2>وصول سريع</h2>
               <Icon name="briefcase" size={18} />
             </div>
+            {hasRole(user, "Administrator", "HR", "Manager", "Employee") && (
+              <button onClick={() => onNavigate("attendance")}>
+                <span className="action-icon">
+                  <Icon name="calendar" />
+                </span>
+                <span>
+                  <strong>متابعة الحضور</strong>
+                  <small>الجداول والحركات وطلبات التصحيح</small>
+                </span>
+                <Icon name="arrow" size={16} />
+              </button>
+            )}
             {hr && (
               <>
                 <button onClick={() => onNavigate("import")}>

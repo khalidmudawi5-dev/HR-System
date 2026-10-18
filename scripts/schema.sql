@@ -417,3 +417,197 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE TABLE [AttendanceHolidays] (
+        [Id] uniqueidentifier NOT NULL,
+        [Date] date NOT NULL,
+        [Name] nvarchar(160) NOT NULL,
+        [Version] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_AttendanceHolidays] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE TABLE [AttendancePolicies] (
+        [Id] uniqueidentifier NOT NULL,
+        [Singleton] int NOT NULL,
+        [PortalEnabled] bit NOT NULL,
+        [Version] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_AttendancePolicies] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_AttendancePolicy_Singleton] CHECK ([Singleton] = 1)
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE TABLE [AttendancePunches] (
+        [Id] uniqueidentifier NOT NULL,
+        [EmployeeId] uniqueidentifier NOT NULL,
+        [OccurredAtUtc] datetime2 NOT NULL,
+        [Kind] nvarchar(10) NOT NULL,
+        [Source] nvarchar(50) NOT NULL,
+        [RecordedAtUtc] datetime2 NOT NULL,
+        [Version] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_AttendancePunches] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_AttendancePunch_Kind] CHECK ([Kind] IN ('In','Out')),
+        CONSTRAINT [FK_AttendancePunches_Employees_EmployeeId] FOREIGN KEY ([EmployeeId]) REFERENCES [Employees] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE TABLE [WorkShifts] (
+        [Id] uniqueidentifier NOT NULL,
+        [Name] nvarchar(100) NOT NULL,
+        [StartMinute] int NOT NULL,
+        [EndMinute] int NOT NULL,
+        [EndsNextDay] bit NOT NULL,
+        [BreakOffsetMinutes] int NOT NULL,
+        [BreakMinutes] int NOT NULL,
+        [ArrivalGraceMinutes] int NOT NULL,
+        [DepartureGraceMinutes] int NOT NULL,
+        [CaptureBeforeMinutes] int NOT NULL,
+        [CaptureAfterMinutes] int NOT NULL,
+        [Version] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_WorkShifts] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE TABLE [WorkSchedules] (
+        [Id] uniqueidentifier NOT NULL,
+        [EmployeeId] uniqueidentifier NOT NULL,
+        [WorkDate] date NOT NULL,
+        [ShiftId] uniqueidentifier NULL,
+        [IsRestDay] bit NOT NULL,
+        [TimeZone] nvarchar(100) NOT NULL,
+        [LastChangeReason] nvarchar(500) NOT NULL,
+        [Version] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_WorkSchedules] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_WorkSchedule_Shift] CHECK (([IsRestDay] = 1 AND [ShiftId] IS NULL) OR ([IsRestDay] = 0 AND [ShiftId] IS NOT NULL)),
+        CONSTRAINT [FK_WorkSchedules_Employees_EmployeeId] FOREIGN KEY ([EmployeeId]) REFERENCES [Employees] ([Id]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_WorkSchedules_WorkShifts_ShiftId] FOREIGN KEY ([ShiftId]) REFERENCES [WorkShifts] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE TABLE [AttendanceCorrections] (
+        [Id] uniqueidentifier NOT NULL,
+        [ScheduleId] uniqueidentifier NOT NULL,
+        [ScheduleVersion] uniqueidentifier NOT NULL,
+        [ActiveScheduleId] uniqueidentifier NULL,
+        [FirstInUtc] datetime2 NOT NULL,
+        [LastOutUtc] datetime2 NOT NULL,
+        [Reason] nvarchar(500) NOT NULL,
+        [Status] nvarchar(20) NOT NULL,
+        [RequestedBy] nvarchar(450) NOT NULL,
+        [RequestedAtUtc] datetime2 NOT NULL,
+        [ReviewedBy] nvarchar(450) NULL,
+        [ReviewedAtUtc] datetime2 NULL,
+        [ReviewNote] nvarchar(500) NOT NULL,
+        [Version] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_AttendanceCorrections] PRIMARY KEY ([Id]),
+        CONSTRAINT [CK_AttendanceCorrection_Status] CHECK ([Status] IN ('Pending','Approved','Rejected','Cancelled')),
+        CONSTRAINT [FK_AttendanceCorrections_WorkSchedules_ScheduleId] FOREIGN KEY ([ScheduleId]) REFERENCES [WorkSchedules] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_AttendanceCorrections_ActiveScheduleId] ON [AttendanceCorrections] ([ActiveScheduleId]) WHERE [ActiveScheduleId] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE INDEX [IX_AttendanceCorrections_ScheduleId] ON [AttendanceCorrections] ([ScheduleId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_AttendanceHolidays_Date] ON [AttendanceHolidays] ([Date]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_AttendancePolicies_Singleton] ON [AttendancePolicies] ([Singleton]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_AttendancePunches_EmployeeId_OccurredAtUtc_Kind] ON [AttendancePunches] ([EmployeeId], [OccurredAtUtc], [Kind]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_WorkSchedules_EmployeeId_WorkDate] ON [WorkSchedules] ([EmployeeId], [WorkDate]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE INDEX [IX_WorkSchedules_ShiftId] ON [WorkSchedules] ([ShiftId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_WorkShifts_Name] ON [WorkShifts] ([Name]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261018073539_AttendanceFoundation'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261018073539_AttendanceFoundation', N'10.0.13');
+END;
+
+COMMIT;
+GO
+

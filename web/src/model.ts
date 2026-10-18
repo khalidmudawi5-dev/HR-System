@@ -32,6 +32,9 @@ export type Notice = (
   tone?: "success" | "error" | "info",
 ) => void;
 export type Section =
+  | "attendance"
+  | "attendanceSetup"
+  | "attendanceImport"
   | "home"
   | "employees"
   | "organization"
@@ -111,6 +114,12 @@ export const formatDate = (value: string) =>
 export const activityLabel = (action: string) => {
   const [entity, verb] = action.split(".");
   const entities: Record<string, string> = {
+    WorkShift: "تعريف شفت",
+    WorkSchedule: "جدول حضور",
+    AttendanceHoliday: "عطلة",
+    AttendancePolicy: "سياسة حضور",
+    AttendancePunch: "حركة حضور",
+    AttendanceCorrection: "طلب تصحيح حضور",
     Employee: "ملف موظف",
     Organization: "المنشأة",
     Branch: "فرع",
@@ -123,6 +132,7 @@ export const activityLabel = (action: string) => {
   const verbs: Record<string, string> = {
     Added: "إضافة",
     Modified: "تحديث",
+    Deleted: "حذف",
     Created: "إنشاء",
     RoleChanged: "تغيير صلاحية",
     Enabled: "تفعيل",

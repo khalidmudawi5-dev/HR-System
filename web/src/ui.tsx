@@ -319,12 +319,14 @@ export function Modal({
   onClose,
   busy = false,
   subtitle,
+  closeLabel = "إغلاق ملف الموظف",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   busy?: boolean;
   subtitle?: string;
+  closeLabel?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -363,7 +365,7 @@ export function Modal({
           <button
             className="icon-button"
             type="button"
-            aria-label="إغلاق ملف الموظف"
+            aria-label={closeLabel}
             disabled={busy}
             onClick={onClose}
           >

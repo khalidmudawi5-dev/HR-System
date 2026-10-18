@@ -31,6 +31,7 @@ public class ExcelEmployees(HrDbContext db)
         if(w.Worksheets.Count!=1) throw new RuleException("استخدم ورقة القالب الواحدة.");
         var s=w.Worksheet(1); var last=s.LastRowUsed()?.RowNumber() ?? 1;
         if(last>2001 || (s.LastColumnUsed()?.ColumnNumber() ?? 0)!=6) throw new RuleException("الحد 2000 موظف وبنفس أعمدة القالب.");
+        if(s.Row(1).Cells(1,6).Any(c=>c.HasFormula)) throw new RuleException("الصيغ غير مسموحة في عناوين القالب.");
         for(var i=0;i<Headers.Length;i++) if(s.Cell(1,i+1).GetString()!=Headers[i]) throw new RuleException("عناوين القالب غير مطابقة.");
         var existing=(await db.Employees.Select(x=>x.Number).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var jobs=(await db.Jobs.Select(x=>x.Id).ToListAsync(ct)).ToHashSet();

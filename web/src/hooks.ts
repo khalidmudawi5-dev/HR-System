@@ -42,6 +42,9 @@ export function useDebouncedValue<T>(value: T, delay = 250) {
   return current;
 }
 const sections: Section[] = [
+  "attendance",
+  "attendanceSetup",
+  "attendanceImport",
   "home",
   "employees",
   "organization",

@@ -112,6 +112,14 @@ public class ApiTests : IClassFixture<TestApp>
         Assert.Equal(HttpStatusCode.BadRequest,(await Send(c,"/api/users",HttpMethod.Post,new{email="duplicate@test.local",password=TestApp.Password,role="Employee",employeeId=app.Alice})).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await Send(c,"/api/users",HttpMethod.Post,new{email="unlinked@test.local",password=TestApp.Password,role="Employee"})).StatusCode);
     }
+    [Fact] public async Task Employee_import_rejects_formula_headers_before_evaluation()
+    {
+        using var client=await Login("hr");
+        using var book=new XLWorkbook(new MemoryStream(Workbook(("HEADERFORM",app.Job.ToString()))));
+        book.Worksheet(1).Cell(1,1).FormulaA1="\"Number\"";
+        using var bytes=new MemoryStream();book.SaveAs(bytes);
+        Assert.Equal(HttpStatusCode.BadRequest,(await Send(client,"/api/import/employees/preview",HttpMethod.Post,content:File(bytes.ToArray()))).StatusCode);
+    }
     [Fact] public async Task Audit_records_changes_without_financial_values()
     {
         using var c=await Login("admin");(await Send(c,"/api/branches",HttpMethod.Post,new{name="فرع تدقيق"})).EnsureSuccessStatusCode();

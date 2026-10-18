@@ -18,6 +18,11 @@ import {
 } from "./model";
 import { Field, Icon, type IconName } from "./ui";
 import { Overview } from "./pages/Overview";
+import {
+  Attendance,
+  AttendanceSetup,
+  AttendanceImportPage,
+} from "./pages/Attendance";
 import { Employees } from "./pages/Employees";
 import {
   Organization,
@@ -29,6 +34,9 @@ import {
 } from "./pages/FoundationPages";
 
 const descriptions: Record<Section, string> = {
+  attendance: "حضور واضح، وجداول منظمة، وتصحيحات تمر بمراجعة واعتماد.",
+  attendanceSetup: "عرّف الشفتات ووزّع الجداول واضبط عطلات وسياسة الحضور.",
+  attendanceImport: "استورد الحركات الأصلية مع معاينة الأخطاء وتجاهل التكرار.",
   home: "صورة واضحة لفريقك، وكل ما تحتاجه لبدء يومك.",
   employees: "إدارة ملفات الفريق والبيانات الوظيفية من مكان واحد.",
   organization: "ابدأ بمنشأتك، ثم رتّب الفروع والأقسام والوظائف.",
@@ -166,6 +174,35 @@ export default function App() {
                   : "ملفي",
               icon: "users" as const,
               group: "مساحة العمل",
+            },
+          ]
+        : []),
+      ...(has("Administrator", "HR", "Manager", "Employee")
+        ? [
+            {
+              id: "attendance" as const,
+              label:
+                has("Employee") && !has("Administrator", "HR", "Manager")
+                  ? "حضوري"
+                  : "الحضور والانصراف",
+              icon: "calendar" as const,
+              group: "مساحة العمل",
+            },
+          ]
+        : []),
+      ...(has("Administrator", "HR")
+        ? [
+            {
+              id: "attendanceSetup" as const,
+              label: "الجداول وسياسة الحضور",
+              icon: "briefcase" as const,
+              group: "إدارة الحضور",
+            },
+            {
+              id: "attendanceImport" as const,
+              label: "استيراد حركات الحضور",
+              icon: "upload" as const,
+              group: "إدارة الحضور",
             },
           ]
         : []),
@@ -480,6 +517,20 @@ export default function App() {
               initialSearch={employeeSearch}
               timeZone={dashboard.data?.timeZone}
             />
+          )}
+          {section === "attendance" && (
+            <Attendance
+              user={user}
+              notify={notify}
+              detail={route.detail}
+              onNavigate={go}
+            />
+          )}
+          {section === "attendanceSetup" && (
+            <AttendanceSetup user={user} notify={notify} />
+          )}
+          {section === "attendanceImport" && (
+            <AttendanceImportPage notify={notify} />
           )}
           {section === "organization" && (
             <Organization admin={has("Administrator")} notify={notify} />
